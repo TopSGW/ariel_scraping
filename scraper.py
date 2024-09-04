@@ -201,7 +201,7 @@ class ProductScraper:
             pricing['Quantities'] = [header.get_text(strip=True).replace('&nbsp;', '') for header in quantity_headers]
 
             price_row = pricing_table.find('tbody').find('tr')
-            price_cells = price_row.find_all('th')[1:]  # Skip the first cell ('Price (5C)')
+            price_cells = price_row.find_all('th')  # Skip the first cell ('Price (5C)')
             pricing['Prices'] = [price_cell.get_text(strip=True).replace('&nbsp;', '') for price_cell in price_cells]
 
             return pricing
@@ -212,17 +212,16 @@ class ProductScraper:
     def save_to_csv(self, data):
         """Save the extracted data to a CSV file with appropriate column headings."""
         file_path = 'scraped_products.csv'
-        file_exists = os.path.isfile(file_path)
-
+        # Determine columns and data based on the page type
         if self.pagetype == 'list':
+            # Define columns for product listing
             columns = ['Product Name', 'Product Description', 'SKU', 'Price']
             df = pd.DataFrame(data, columns=columns)
         else:
-            columns = [
-                'SKU', 'Item Size', 'Method', 'Location', 'Width', 'Height',
-                *data[0]['Pricing']['Quantities']
-            ]
-
+            # Define columns for detail page
+            columns = ['SKU', 'Item Size', 'Method', 'Location', 'Width', 'Height'] + data[0]['Pricing']['Quantities']
+            
+            # Prepare data for detail page, flattening nested structures
             detail_rows = []
             for product in data:
                 for area in product['Imprint Areas']:
@@ -235,13 +234,21 @@ class ProductScraper:
                             'Width': location.get('Width', 'N/A'),
                             'Height': location.get('Height', 'N/A'),
                         }
+                        # Add pricing details to row
                         for quantity, price in zip(product['Pricing']['Quantities'], product['Pricing']['Prices']):
                             row[quantity] = price
                         detail_rows.append(row)
 
             df = pd.DataFrame(detail_rows, columns=columns)
 
-        df.to_csv(file_path, mode='a', header=not file_exists, index=False)
+        # Write to CSV, ensuring headers are included when file is first created
+        if not os.path.isfile(file_path) or os.stat(file_path).st_size == 0:
+            # File does not exist or is empty, write headers
+            df.to_csv(file_path, mode='w', header=True, index=False)
+        else:
+            # Append data without headers
+            df.to_csv(file_path, mode='a', header=False, index=False)
+        
         print(f"Data saved to {file_path}")
 
     def display_data(self, data):
